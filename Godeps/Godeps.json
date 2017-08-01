@@ -1,0 +1,34 @@
+{
+	"ImportPath": "github.com/fujitsueos/sql-migrate",
+	"GoVersion": "go1.8",
+	"GodepVersion": "v79",
+	"Packages": [
+		"github.com/fujitsueos/sql-migrate",
+		"github.com/fujitsueos/sql-migrate/sqlparse"
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/lib/pq",
+			"Comment": "go1.0-cutoff-143-g67c3f2a",
+			"Rev": "67c3f2a8884c9b1aac5503c8d42ae4f73a93511c"
+		},
+		{
+			"ImportPath": "github.com/lib/pq/oid",
+			"Comment": "go1.0-cutoff-143-g67c3f2a",
+			"Rev": "67c3f2a8884c9b1aac5503c8d42ae4f73a93511c"
+		},
+		{
+			"ImportPath": "github.com/rubenv/sql-migrate/sqlparse",
+			"Rev": "72a5478faa469f9023cc1802367cddfc5270acbb"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "20d25e2804050c1cd24a7eea1e7a6447dd0e74ec"
+		},
+		{
+			"ImportPath": "gopkg.in/gorp.v1",
+			"Comment": "v1.7.1",
+			"Rev": "c87af80f3cc5036b55b83d77171e156791085e2e"
+		}
+	]
+}
