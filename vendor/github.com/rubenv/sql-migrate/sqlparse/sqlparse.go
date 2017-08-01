@@ -11,12 +11,16 @@ import (
 )
 
 const (
-	sqlCmdPrefix = "-- +migrate "
+	sqlCmdPrefix        = "-- +migrate "
+	optionNoTransaction = "notransaction"
 )
 
 type ParsedMigration struct {
 	UpStatements   []string
 	DownStatements []string
+
+	DisableTransactionUp   bool
+	DisableTransactionDown bool
 }
 
 var (
@@ -143,6 +147,9 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 					return nil, errNoTerminator()
 				}
 				currentDirection = directionUp
+				if cmd.HasOption(optionNoTransaction) {
+					p.DisableTransactionUp = true
+				}
 				break
 
 			case "Down":
@@ -150,6 +157,9 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 					return nil, errNoTerminator()
 				}
 				currentDirection = directionDown
+				if cmd.HasOption(optionNoTransaction) {
+					p.DisableTransactionDown = true
+				}
 				break
 
 			case "StatementBegin":
