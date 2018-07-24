@@ -1,15 +1,7 @@
-PKGS = $(shell go list ./... | grep -v /vendor/)
-
-vet:
-	go vet $(PKGS)
-
-fmt:
-	go fmt $(PKGS)
-
 test:
-	go test -race -cover $(PKGS)
+	go test -race -cover ./...
 
 update-deps:
-	godep save $(PKGS)
+	dep ensure -update
 
-.PHONY: vet fmt test update-deps
+.PHONY: test update-deps
