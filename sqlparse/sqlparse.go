@@ -34,8 +34,8 @@ func errNoTerminator() error {
 			See https://github.com/rubenv/sql-migrate for details.`)
 	}
 
-	return errors.New(fmt.Sprintf(`ERROR: The last statement must be ended by a semicolon, a line whose contents are %q, or '-- +migrate StatementEnd' marker.
-			See https://github.com/rubenv/sql-migrate for details.`, LineSeparator))
+	return fmt.Errorf(`ERROR: The last statement must be ended by a semicolon, a line whose contents are %q, or '-- +migrate StatementEnd' marker.
+			See https://github.com/rubenv/sql-migrate for details.`, LineSeparator)
 }
 
 // Checks the line to see if the line has a statement-ending semicolon
@@ -99,6 +99,50 @@ func parseCommand(line string) (*migrateCommand, error) {
 	return cmd, nil
 }
 
+type migrationState struct {
+	statementEnded   bool
+	ignoreSemicolons bool
+	direction        migrationDirection
+}
+
+func updateState(line string, buf bytes.Buffer, currentState migrationState) (nextState migrationState, err error) {
+	nextState = currentState
+
+	// handle any migrate-specific commands
+	if strings.HasPrefix(line, sqlCmdPrefix) {
+		var cmd *migrateCommand
+		if cmd, err = parseCommand(line); err != nil {
+			return
+		}
+
+		switch cmd.Command {
+		case "Up":
+			if len(strings.TrimSpace(buf.String())) > 0 {
+				err = errNoTerminator()
+				return
+			}
+			nextState.direction = directionUp
+		case "Down":
+			if len(strings.TrimSpace(buf.String())) > 0 {
+				err = errNoTerminator()
+				return
+			}
+			nextState.direction = directionDown
+		case "StatementBegin":
+			if currentState.direction != directionNone {
+				nextState.ignoreSemicolons = true
+			}
+		case "StatementEnd":
+			if currentState.direction != directionNone {
+				nextState.statementEnded = currentState.ignoreSemicolons
+				nextState.ignoreSemicolons = false
+			}
+		}
+	}
+
+	return
+}
+
 // Split the given sql script into individual statements.
 //
 // The base case is to simply split on semicolons, as these
@@ -119,9 +163,7 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 	var buf bytes.Buffer
 	scanner := bufio.NewScanner(r)
 
-	statementEnded := false
-	ignoreSemicolons := false
-	currentDirection := directionNone
+	state := migrationState{}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -130,48 +172,16 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 			continue
 		}
 
-		// handle any migrate-specific commands
-		if strings.HasPrefix(line, sqlCmdPrefix) {
-			cmd, err := parseCommand(line)
-			if err != nil {
-				return nil, err
-			}
-
-			switch cmd.Command {
-			case "Up":
-				if len(strings.TrimSpace(buf.String())) > 0 {
-					return nil, errNoTerminator()
-				}
-				currentDirection = directionUp
-				break
-
-			case "Down":
-				if len(strings.TrimSpace(buf.String())) > 0 {
-					return nil, errNoTerminator()
-				}
-				currentDirection = directionDown
-				break
-
-			case "StatementBegin":
-				if currentDirection != directionNone {
-					ignoreSemicolons = true
-				}
-				break
-
-			case "StatementEnd":
-				if currentDirection != directionNone {
-					statementEnded = (ignoreSemicolons == true)
-					ignoreSemicolons = false
-				}
-				break
-			}
+		state, err = updateState(line, buf, state)
+		if err != nil {
+			return nil, err
 		}
 
-		if currentDirection == directionNone {
+		if state.direction == directionNone {
 			continue
 		}
 
-		isLineSeparator := !ignoreSemicolons && len(LineSeparator) > 0 && line == LineSeparator
+		isLineSeparator := !state.ignoreSemicolons && len(LineSeparator) > 0 && line == LineSeparator
 
 		if !isLineSeparator && !strings.HasPrefix(line, "-- +") {
 			if _, err := buf.WriteString(line + "\n"); err != nil {
@@ -182,9 +192,9 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 		// Wrap up the two supported cases: 1) basic with semicolon; 2) psql statement
 		// Lines that end with semicolon that are in a statement block
 		// do not conclude statement.
-		if (!ignoreSemicolons && (endsWithSemicolon(line) || isLineSeparator)) || statementEnded {
-			statementEnded = false
-			switch currentDirection {
+		if (!state.ignoreSemicolons && (endsWithSemicolon(line) || isLineSeparator)) || state.statementEnded {
+			state.statementEnded = false
+			switch state.direction {
 			case directionUp:
 				p.UpStatements = append(p.UpStatements, buf.String())
 
@@ -204,11 +214,11 @@ func ParseMigration(r io.ReadSeeker) (*ParsedMigration, error) {
 	}
 
 	// diagnose likely migration script errors
-	if ignoreSemicolons {
+	if state.ignoreSemicolons {
 		return nil, errors.New("ERROR: saw '-- +migrate StatementBegin' with no matching '-- +migrate StatementEnd'")
 	}
 
-	if currentDirection == directionNone {
+	if state.direction == directionNone {
 		return nil, errors.New(`ERROR: no Up/Down annotations found, so no statements were executed.
 			See https://github.com/rubenv/sql-migrate for details.`)
 	}
