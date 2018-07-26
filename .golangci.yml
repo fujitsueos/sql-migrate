@@ -1,0 +1,17 @@
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - errcheck
+    - gas
+    - structcheck
+    - varcheck
+    - ineffassign
+    - deadcode
+    - typecheck
+    - interfacer
+    - unconvert
+    - goconst
+    - gocyclo
+    - goimports
+    - megacheck

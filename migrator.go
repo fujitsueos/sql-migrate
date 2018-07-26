@@ -31,26 +31,24 @@ type Migrator struct {
 	migrations []*Migration
 }
 
-func NewMigrator(connStr, dir string) (*Migrator, error) {
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, err
+func NewMigrator(connStr, dir string) (migrator *Migrator, err error) {
+	var db *sql.DB
+
+	if db, err = sql.Open("postgres", connStr); err != nil {
+		return
 	}
 
 	dbMap := &gorp.DbMap{Db: db, Dialect: gorp.PostgresDialect{}}
 	dbMap.AddTableWithName(MigrationRecord{}, tableName).SetKeys(false, "Id")
 
 	if err = dbMap.CreateTablesIfNotExists(); err != nil {
-		return nil, err
+		return
 	}
 
-	m := &Migrator{dbMap: dbMap}
+	migrator = &Migrator{dbMap: dbMap}
+	err = migrator.findMigrations(dir)
 
-	if m.findMigrations(dir); err != nil {
-		return nil, err
-	}
-
-	return m, nil
+	return
 }
 
 func (m *Migrator) begin() (err error) {
@@ -113,7 +111,9 @@ func (m *Migrator) Exec(dir MigrationDirection) (applied int, err error) {
 
 	var migrations []*PlannedMigration
 	if migrations, err = m.planMigration(dir); err != nil {
-		m.tx.Rollback()
+		if rollbackErr := m.tx.Rollback(); rollbackErr != nil {
+			log.WithField("error", err).Error("Failed to roll back")
+		}
 		return
 	}
 
@@ -122,7 +122,9 @@ func (m *Migrator) Exec(dir MigrationDirection) (applied int, err error) {
 		log.Infof("Applying %s", migration.FileName)
 		for _, stmt := range migration.Queries {
 			if _, err := m.tx.Exec(stmt); err != nil {
-				m.tx.Rollback()
+				if rollbackErr := m.tx.Rollback(); rollbackErr != nil {
+					log.WithField("error", err).Error("Failed to roll back")
+				}
 				return applied, newTxError(migration, err)
 			}
 		}
@@ -133,14 +135,18 @@ func (m *Migrator) Exec(dir MigrationDirection) (applied int, err error) {
 				FileName:  migration.FileName,
 				AppliedAt: time.Now(),
 			}); err != nil {
-				m.tx.Rollback()
+				if rollbackErr := m.tx.Rollback(); rollbackErr != nil {
+					log.WithField("error", err).Error("Failed to roll back")
+				}
 				return applied, newTxError(migration, err)
 			}
 		} else if dir == Down {
 			if _, err = m.tx.Delete(&MigrationRecord{
 				Id: migration.Id,
 			}); err != nil {
-				m.tx.Rollback()
+				if rollbackErr := m.tx.Rollback(); rollbackErr != nil {
+					log.WithField("error", err).Error("Failed to roll back")
+				}
 				return applied, newTxError(migration, err)
 			}
 		}
@@ -155,7 +161,7 @@ func (m *Migrator) Exec(dir MigrationDirection) (applied int, err error) {
 // Plan a migration.
 func (m *Migrator) planMigration(dir MigrationDirection) ([]*PlannedMigration, error) {
 	var migrationRecords []MigrationRecord
-	if _, err := m.tx.Select(&migrationRecords, fmt.Sprintf("SELECT * FROM %s", tableName)); err != nil {
+	if _, err := m.tx.Select(&migrationRecords, "SELECT * FROM $1", tableName); err != nil {
 		return nil, err
 	}
 
