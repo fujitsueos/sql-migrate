@@ -3,6 +3,7 @@ package migrate
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fujitsueos/sql-migrate/sqlparse"
 	_ "github.com/lib/pq"
-	"github.com/rubenv/sql-migrate/sqlparse"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/gorp.v2"
 )
@@ -31,7 +32,7 @@ type Migrator struct {
 	migrations []*Migration
 }
 
-func NewMigrator(connStr, dir string) (migrator *Migrator, err error) {
+func NewMigrator(connStr string) (migrator *Migrator, err error) {
 	var db *sql.DB
 
 	if db, err = sql.Open("postgres", connStr); err != nil {
@@ -46,9 +47,36 @@ func NewMigrator(connStr, dir string) (migrator *Migrator, err error) {
 	}
 
 	migrator = &Migrator{dbMap: dbMap}
-	err = migrator.findMigrations(dir)
 
 	return
+}
+
+func (m *Migrator) AddMigrations(migrations map[string]string) error {
+	readSeekers := make(map[string]io.ReadSeeker)
+	for name, migration := range migrations {
+		readSeekers[name] = strings.NewReader(migration)
+	}
+	return m.loadMigrations(readSeekers)
+}
+
+func (m *Migrator) AddMigrationsFromFile(dir string) error {
+	fileInfos, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	files := make(map[string]io.ReadSeeker)
+	for _, info := range fileInfos {
+		file, err := os.Open(filepath.Join(dir, info.Name()))
+		if err != nil {
+			return fmt.Errorf("Error while opening %s: %s", info.Name(), err)
+		}
+		defer file.Close()
+
+		files[info.Name()] = file
+	}
+
+	return m.loadMigrations(files)
 }
 
 func (m *Migrator) begin() (err error) {
@@ -60,39 +88,24 @@ func (m *Migrator) begin() (err error) {
 	return
 }
 
-func (m *Migrator) findMigrations(dir string) error {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return err
-	}
+func (m *Migrator) loadMigrations(migrations map[string]io.ReadSeeker) error {
+	var err error
 
-	m.migrations = make([]*Migration, 0, len(files))
-	for _, info := range files {
-		if strings.HasSuffix(info.Name(), ".sql") {
-
-			file, err := os.Open(filepath.Join(dir, info.Name()))
-			if err != nil {
-				return fmt.Errorf("Error while opening %s: %s", info.Name(), err)
-			}
-
-			migration := &Migration{FileName: info.Name()}
-			if migration.Id, err = ParseVersion(info.Name()); err != nil {
-				return err
-			}
-
-			parsed, err := sqlparse.ParseMigration(file)
-			if err != nil {
-				return fmt.Errorf("Error parsing migration (%d): %s", migration.Id, err)
-			}
-			migration.Up = parsed.UpStatements
-			migration.Down = parsed.DownStatements
-
-			if err != nil {
-				return fmt.Errorf("Error while parsing %s: %s", info.Name(), err)
-			}
-
-			m.migrations = append(m.migrations, migration)
+	m.migrations = make([]*Migration, 0, len(migrations))
+	for name, readSeeker := range migrations {
+		migration := &Migration{FileName: name}
+		if migration.Id, err = ParseVersion(name); err != nil {
+			return err
 		}
+
+		parsed, err := sqlparse.ParseMigration(readSeeker)
+		if err != nil {
+			return fmt.Errorf("Error parsing migration (%d): %s", migration.Id, err)
+		}
+		migration.Up = parsed.UpStatements
+		migration.Down = parsed.DownStatements
+
+		m.migrations = append(m.migrations, migration)
 	}
 
 	// Make sure migrations are sorted

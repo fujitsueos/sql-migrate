@@ -2,14 +2,22 @@
 
 
 [[projects]]
-  name = "github.com/lib/pq"
-  packages = [".","oid"]
-  revision = "67c3f2a8884c9b1aac5503c8d42ae4f73a93511c"
+  name = "github.com/kr/pretty"
+  packages = ["."]
+  revision = "73f6ac0b30a98e433b289500d779f50c1a6f0712"
+  version = "v0.1.0"
 
 [[projects]]
-  name = "github.com/rubenv/sql-migrate"
-  packages = ["sqlparse"]
-  revision = "72a5478faa469f9023cc1802367cddfc5270acbb"
+  name = "github.com/kr/text"
+  packages = ["."]
+  revision = "e2ffdb16a802fe2bb95e2e35ff34f0e53aeef34f"
+  version = "v0.1.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/lib/pq"
+  packages = [".","oid"]
+  revision = "90697d60dd844d5ef6ff15135d0203f65d2f53b8"
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
@@ -27,12 +35,13 @@
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
+  revision = "bd9dbc187b6e1dacfdd2722a87e83093c2d7bd6e"
 
 [[projects]]
+  branch = "v1"
   name = "gopkg.in/check.v1"
   packages = ["."]
-  revision = "20d25e2804050c1cd24a7eea1e7a6447dd0e74ec"
+  revision = "788fd78401277ebd861206a03c884797c6ec5541"
 
 [[projects]]
   name = "gopkg.in/gorp.v2"
@@ -43,6 +52,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "54d41207c535d031c0921152ee58c6a91c0d18e6651def9b07f8b3c621391890"
+  inputs-digest = "33e798800f793dce6192e726794c278405c55c2188371e67b38ac6b3c324dbe3"
   solver-name = "gps-cdcl"
   solver-version = 1

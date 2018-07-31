@@ -22,12 +22,6 @@
 
 
 [[constraint]]
-  name = "github.com/lib/pq"
-
-[[constraint]]
-  name = "github.com/rubenv/sql-migrate"
-
-[[constraint]]
   name = "github.com/sirupsen/logrus"
   version = "1.0.6"
 
