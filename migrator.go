@@ -24,8 +24,6 @@ const (
 	Down
 )
 
-var tableName = "migrations"
-
 type Migrator struct {
 	tx         *gorp.Transaction
 	dbMap      *gorp.DbMap
@@ -40,7 +38,7 @@ func NewMigrator(connStr string) (migrator *Migrator, err error) {
 	}
 
 	dbMap := &gorp.DbMap{Db: db, Dialect: gorp.PostgresDialect{}}
-	dbMap.AddTableWithName(MigrationRecord{}, tableName).SetKeys(false, "Id")
+	dbMap.AddTableWithName(MigrationRecord{}, "migrations").SetKeys(false, "Id")
 
 	if err = dbMap.CreateTablesIfNotExists(); err != nil {
 		return
@@ -84,7 +82,7 @@ func (m *Migrator) begin() (err error) {
 		return
 	}
 
-	_, err = m.tx.Exec(fmt.Sprintf("LOCK TABLE %s IN ACCESS EXCLUSIVE MODE", tableName))
+	_, err = m.tx.Exec("LOCK TABLE migrations IN ACCESS EXCLUSIVE MODE")
 	return
 }
 
@@ -174,7 +172,7 @@ func (m *Migrator) Exec(dir MigrationDirection) (applied int, err error) {
 // Plan a migration.
 func (m *Migrator) planMigration(dir MigrationDirection) ([]*PlannedMigration, error) {
 	var migrationRecords []MigrationRecord
-	if _, err := m.tx.Select(&migrationRecords, "SELECT * FROM $1", tableName); err != nil {
+	if _, err := m.tx.Select(&migrationRecords, "SELECT * FROM migrations"); err != nil {
 		return nil, err
 	}
 
